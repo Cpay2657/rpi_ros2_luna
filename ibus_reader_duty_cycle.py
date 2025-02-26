@@ -12,6 +12,7 @@ import pigpio
 
 PWM_PIN = 21
 PWM_FREQ = 50
+PWM_RANGE = 20000
 PWM_MAX = 100
 PWM_MID = 75
 PWM_MIN = 50
@@ -21,8 +22,8 @@ pi = pigpio.pi()
 pi.set_PWM_frequency(PWM_PIN, 50) # Default RC frequency is 50 Hz
 
 # Set the range of the PWM:
-# (e.g. if range is 1000, 100 is 10%, 75 is 7.5%, and 50 is 5%.)
-pi.set_PWM_range(PWM_PIN, 1000)
+# (e.g. if range is 20000, 2000 is 10%, 1500 is 7.5%, and 1000 is 5%.)
+pi.set_PWM_range(PWM_PIN, PWM_RANGE)
 
 # Set the PWM to 0% DC (off)
 pi.set_PWM_dutycycle(PWM_PIN, 0)
@@ -128,4 +129,5 @@ while True:
         if servo > 1500:
             servo = 1500
         pi.set_servo_pulsewidth(18, servo)
+
 
