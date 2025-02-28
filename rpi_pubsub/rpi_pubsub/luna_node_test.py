@@ -1,5 +1,27 @@
+'''
+Description:
+This code is the primary node for running the Luna Bot's hardware.
 
-# this code read pwm from rc receiver. using pigpio, use pin GPIO# 18
+Written by: Christopher Payne
+Date: 28 Feb. 2025
+
+This code currently supports:
+
+	1.) Reading I-Bus protocol up to 6-channels
+	2.) Setting up 6 PWMs formatted for RC control (50 Hz, DC Range: 5%-10%)
+	3.) Controlling the duty cycle of up to 6 PWM outputs
+	4.) Receiving commands to switch between RC I-Bus or Pi inputs
+	5.) Receiving commands to change the speed of the Pi inputs
+	6.) Stops All Motors and cleans output GPIOs on shutdown
+
+This code currently needs:
+
+	1.) TODO: Receiving commands to change the speed of the Pi inputs
+	2.) TODO: Add ability to accept input from Panda Computer
+
+
+most recent update: 28 Feb. 2025
+'''
 
 import rclpy
 from rclpy.node import Node
@@ -8,6 +30,7 @@ from std_msgs.msg import String
 
 import pigpio
 import serial
+import time
 
 class Luna(Node):
 
@@ -89,21 +112,43 @@ class Luna(Node):
             self.pi.set_PWM_dutycycle(GPIO, self.Pi_STOP) # Default is the motor being stopped
             print(f"Pi PWM is setup: GPIO (BCM): {GPIO}, F(Hz): {self.Pi_FREQ}, DCs(%): {self.Pi_STOP}")
 
+    def update_info(self, DCs):
+        for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
+            self.LUNA_GPIO_OUT[key][1] = DCs[i]
+
 
     def luna_move(self,DCs):
         drive_speed = DCs[self.SPEED_CH]
         drive_direction = DCs[self.DIRECTION_CH]
+        arm_length = DCs[self.ARM_LENGTH_CH]
+        drill_direction = DCs[self.DRILL_CH]
+        arm_tilt = DCs[self.ARM_TILT_CH]
+        bin_tilt = DCs[self.BIN_TILT_CH]
 
         drive_speed_norm = (drive_speed-75)/25 # 75=0, 50=-1,100=+1
         drive_direction_norm = (drive_direction-75)/25 # 75=0, 50=-1,100=+1
+        arm_length_norm = (arm_length-75)/25 # 75=0, 50=-1,100=+1
+        drill_direction_norm = (drill_direction-75)/25 # 75=0, 50=-1,100=+1
+        arm_tilt_norm = (arm_tilt-75)/25 # 75=0, 50=-1,100=+1
+        bin_tilt_norm = (bin_tilt-75)/25 # 75=0, 50=-1,100=+1
 
-        print(f"drive_speed,drive_speed_norm: {drive_speed},{drive_speed_norm} drive_direction,drive_direction_norm: {drive_direction},{drive_direction_norm}")
+        # Troubleshooting Printouts
+        print(f"drive_speed,drive_speed_norm: {drive_speed},{drive_speed_norm}")
+        print(f"drive_direction,drive_direction_norm: {drive_direction},{drive_direction_norm}")
+        print(f"arm_length,arm_lenght_norm: {arm_length},{arm_length_norm}")
+        print(f"drill_direction,drill_direction_norm: {drill_direction},{drill_direction_norm}")
+        print(f"arm_tilt,arm_tilt_norm: {arm_tilt},{arm_tilt_norm}")
+        print(f"bin_tilt,bin_tilt_norm: {bin_tilt},{bin_tilt_norm}")
 
         # Joystick Tolerances
         joy_tol_pos = .04
         joy_tol_neg = -1*joy_tol_pos
 
-        # Motor Control Logic
+        # One Direction Channel Zero Tolerance
+        arm_length_min_tol = 0.04 + self.Pi_MIN
+        arm_length_max_tol = self.Pi_MAX - 0.04
+
+        # Motor Control Logic (drive_speed, drive_direction)
         if drive_direction_norm < joy_tol_neg:
             if abs(drive_speed_norm) >= joy_tol_pos :
                 print("Swing Turning Left")
@@ -128,36 +173,35 @@ class Luna(Node):
             self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_speed)
             self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_speed)
 
+        # Arm Length Control Logic (arm_length)
+        if arm_length > arm_length_min_tol and arm_length < arm_length_max_tol:
+            print("Extending/Contracting Arm")
+            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length)
+        elif arm_length <= arm_length_min_tol:
+            print("Arm Length is at Min Boundary")
+            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_min_tol)
+        elif arm_length >= arm_length_max_tol:
+            print("Arm Length is at Max Boundary")
+            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_max_tol)
+        else:
+            print("Unexpected Input for Arm Length")
+            print("Returning to Home Position (currently min)")
+            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_min_tol)
+
 
 
     def luna_output_timer_callback(self):
         print(f"Sending output from: {self.switch_status}")
         if self.switch_status == "RC":
             DCs = self.read_ibus()
-            # Update the output PWMs
-            for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-                self.LUNA_GPIO_OUT[key][1] = DCs[i]
-            # Set the Output PWMs to the new Duty Cycles
-            #for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-            #    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT[key][0], self.LUNA_GPIO_OUT[key][1])
         elif self.switch_status == "Pi":
-            DCs = [self.Pi_MAX*.5] * 6 # TODO: add in speed from cmd topic
-            # Update the output PWMs
-            for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-                self.LUNA_GPIO_OUT[key][1] = DCs[i]
-            # Set the Output PWMs to the new Duty Cycles
-            #for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-            #    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT[key][0], self.LUNA_GPIO_OUT[key][1])
+            DCs = [self.Pi_STOP] * 6 # TODO: add in speed from cmd topic
         else:
             DCs = [self.Pi_STOP] * 6 # TODO: create a number of channels varaible?
-            # Update the output PWMs
-            for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-                self.LUNA_GPIO_OUT[key][1] = DCs[i]
-            # Set the Output PWMs to the new Duty Cycles
-            #for i,key in enumerate(self.LUNA_GPIO_OUT.keys()):
-            #    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT[key][0], self.LUNA_GPIO_OUT[key][1])
         # Move Luna
         self.luna_move(DCs)
+        # Update the output PWMs
+        self.update_info(DCs)
 
     def luna_info_timer_callback(self):
         print("Luna Info:\n")
@@ -184,6 +228,7 @@ class Luna(Node):
         self.get_logger().info('Base Cmds: "%s"' % msg.data)
 
     def read_ibus(self):
+        cf = 20 # conversion factor (microsec to the appropriate duty cycle range (50 to 100))
         frame = bytearray()
         received_data = None
         received_data = ser.read()  # read serial port
@@ -229,7 +274,7 @@ class Luna(Node):
 
             print("ch1=", ch1,  "ch2=", ch2, "ch3=", ch3, "ch4=", ch4, "ch5=", ch5, "ch6=", ch6)
 
-            return [ch1 / 20, ch2 / 20, ch3 / 20, ch4 / 20, ch5 / 20, ch6 / 20]
+            return [ch1 / cf, ch2 / cf, ch3 / cf, ch4 / cf, ch5 / cf, ch6 / cf]
         else:
             return [75] * 6
 
@@ -246,7 +291,27 @@ def main(args=None):
 
     luna = Luna()
 
-    rclpy.spin(luna)
+    try:
+
+        rclpy.spin(luna)
+
+    except KeyboardInterrupt:
+
+        print("Ctrl+C was pressed - Exiting...")
+
+    finally:
+
+        DCs_STOP = [luna.Pi_STOP] * 6
+        luna.luna_move(DCs_STOP)
+        print(f"Stopping All Motors:\nDCs: {DCs_STOP}...")
+        time.sleep(1)
+
+        print("Tidying up...")
+        DCs_OFF = [0] * 6
+        luna.luna_move(DCs_OFF)
+        print(f"Turn Off All Motors:\nDCs: {DCs_OFF}...")
+        luna.pi.stop()
+        print("\nStopping PWM")
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
@@ -254,6 +319,9 @@ def main(args=None):
     luna.destroy_node()
     rclpy.shutdown()
 
+    print("Closing")
+    luna.pi.close()
+    print("Closing Program")
 
 if __name__ == '__main__':
     main()
