@@ -13,11 +13,20 @@ This code currently supports:
 	4.) Receiving commands to switch between RC I-Bus or Pi inputs
 	5.) Receiving commands to change the speed of the Pi inputs
 	6.) Stops All Motors and cleans output GPIOs on shutdown
+	7.) Move Commands Implemmented:
+		a.) Drive speed
+		b.) Drive direction
+		c.) Drill direction and speed
 
 This code currently needs:
 
 	1.) TODO: Receiving commands to change the speed of the Pi inputs
 	2.) TODO: Add ability to accept input from Panda Computer
+	3.) TODO: Move Commands to be implemmented:
+		a.) Arm Tilt direction and speed (position?)
+		b.) Arm Length direction and speed (position?)
+		c.) Bin Tilt direction and speed (position?)
+
 
 
 most recent update: 28 Feb. 2025
@@ -83,8 +92,8 @@ class Luna(Node):
         # Setting up the Cmd Channels and Duty Cycles
         self.DIRECTION_CH = 0 #ch1 is direction
         self.SPEED_CH = 1 #ch2 is speed
-        self.ARM_LENGTH_CH = 2 #ch3 is arm length
-        self.DRILL_CH = 3 #ch4 is drill speed & direction
+        self.DRILL_CH = 2 #ch3 is drill speed & direction
+        self.ARM_LENGTH_CH = 3 #ch4 is arm length
         self.ARM_TILT_CH = 4 #ch5 is arm tilt
         self.BIN_TILT_CH = 5 #ch6 is bin tilt
 
@@ -121,14 +130,14 @@ class Luna(Node):
         drive_speed = DCs[self.SPEED_CH]
         drive_direction = DCs[self.DIRECTION_CH]
         arm_length = DCs[self.ARM_LENGTH_CH]
-        drill_direction = DCs[self.DRILL_CH]
+        drill_speed = DCs[self.DRILL_CH]
         arm_tilt = DCs[self.ARM_TILT_CH]
         bin_tilt = DCs[self.BIN_TILT_CH]
 
         drive_speed_norm = (drive_speed-75)/25 # 75=0, 50=-1,100=+1
         drive_direction_norm = (drive_direction-75)/25 # 75=0, 50=-1,100=+1
         arm_length_norm = (arm_length-75)/25 # 75=0, 50=-1,100=+1
-        drill_direction_norm = (drill_direction-75)/25 # 75=0, 50=-1,100=+1
+        drill_speed_norm = (drill_speed-75)/25 # 75=0, 50=-1,100=+1
         arm_tilt_norm = (arm_tilt-75)/25 # 75=0, 50=-1,100=+1
         bin_tilt_norm = (bin_tilt-75)/25 # 75=0, 50=-1,100=+1
 
@@ -136,7 +145,7 @@ class Luna(Node):
         print(f"drive_speed,drive_speed_norm: {drive_speed},{drive_speed_norm}")
         print(f"drive_direction,drive_direction_norm: {drive_direction},{drive_direction_norm}")
         print(f"arm_length,arm_lenght_norm: {arm_length},{arm_length_norm}")
-        print(f"drill_direction,drill_direction_norm: {drill_direction},{drill_direction_norm}")
+        print(f"drill_speed,drill_speed_norm: {drill_speed},{drill_speed_norm}")
         print(f"arm_tilt,arm_tilt_norm: {arm_tilt},{arm_tilt_norm}")
         print(f"bin_tilt,bin_tilt_norm: {bin_tilt},{bin_tilt_norm}")
 
@@ -145,50 +154,52 @@ class Luna(Node):
         joy_tol_neg = -1*joy_tol_pos
 
         # One Direction Channel Zero Tolerance
-        arm_length_min_tol = 0.04 + self.Pi_MIN
-        arm_length_max_tol = self.Pi_MAX - 0.04
+        one_way_min_tol = 0.08 + self.Pi_MIN
+        one_way_max_tol = self.Pi_MAX - 0.08
 
-        # Motor Control Logic (drive_speed, drive_direction)
-        if drive_direction_norm < joy_tol_neg:
-            if abs(drive_speed_norm) >= joy_tol_pos :
-                print("Swing Turning Left")
+        if DCs != [0] * 6:
+            # Motor Control Logic (drive_speed, drive_direction)
+            if drive_direction_norm < joy_tol_neg:
+                if abs(drive_speed_norm) >= joy_tol_pos :
+                    print("Swing Turning Left")
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_speed)
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], 0)
+                else:
+                    print("Point Turning Left")
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_direction)
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], 150-drive_direction)
+
+            elif drive_direction_norm > joy_tol_pos:
+                if abs(drive_speed_norm) >= joy_tol_pos:
+                    print("Swing Turning Right")
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], 0)
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_speed)
+                else:
+                    print("Point Turning Right")
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], 150-drive_direction)
+                    self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_direction)
+            else:
+                print("Straight")
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_speed)
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], 0)
-            else:
-                print("Point Turning Left")
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_direction)
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], 150-drive_direction)
-
-        elif drive_direction_norm > joy_tol_pos:
-            if abs(drive_speed_norm) >= joy_tol_pos:
-                print("Swing Turning Right")
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], 0)
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_speed)
+            # Drill Control Logic (drill_speed)
+            if drill_speed > one_way_min_tol and drill_speed < one_way_max_tol:
+                print("Drilling")
+                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["DRILL"][0], drill_speed)
+            elif drill_speed <= one_way_min_tol:
+                print("Drill speed is at Min Boundary")
+                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["DRILL"][0], one_way_min_tol)
+            elif drill_speed >= one_way_max_tol:
+                print("Drill speed is at Max Boundary")
+                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["DRILL"][0], one_way_max_tol)
             else:
-                print("Point Turning Right")
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], 150-drive_direction)
-                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_direction)
+                print("Unexpected Input for Arm Length")
+                print("Returning to Home Position (currently min)")
+                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["DRILL"][0], one_way_min_tol)
         else:
-            print("Straight")
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_speed)
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_speed)
-
-        # Arm Length Control Logic (arm_length)
-        if arm_length > arm_length_min_tol and arm_length < arm_length_max_tol:
-            print("Extending/Contracting Arm")
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length)
-        elif arm_length <= arm_length_min_tol:
-            print("Arm Length is at Min Boundary")
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_min_tol)
-        elif arm_length >= arm_length_max_tol:
-            print("Arm Length is at Max Boundary")
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_max_tol)
-        else:
-            print("Unexpected Input for Arm Length")
-            print("Returning to Home Position (currently min)")
-            self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["ARM_LENGTH"][0], arm_length_min_tol)
-
-
+            print("Turning all Motors Off")
+            for joint in self.LUNA_GPIO_OUT:
+                self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT[joint][0], 0)
 
 
 
