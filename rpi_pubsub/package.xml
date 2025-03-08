@@ -9,6 +9,7 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>pigpio</exec_depend>
   <exec_depend>time</exec_depend>
   <exec_depend>serial</exec_depend>

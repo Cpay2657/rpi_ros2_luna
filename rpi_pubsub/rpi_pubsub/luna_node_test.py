@@ -26,6 +26,7 @@ This code currently needs:
 		a.) Arm Tilt direction and speed (position?)
 		b.) Arm Length direction and speed (position?)
 		c.) Bin Tilt direction and speed (position?)
+	4.)TODO: Implemment Switch from Hardware to Software Controls
 
 
 
@@ -36,6 +37,7 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import String
+from geometry_msgs.msg import Twist # For teleop-keyboard commands
 
 import pigpio
 import serial
@@ -52,8 +54,8 @@ class Luna(Node):
                 self.switch_listener_callback,
                 10)
         self.cmd_sub = self.create_subscription(
-                String,
-                'LunaCmds',
+                Twist,
+                'LunaCmdVel',
                 self.cmd_listener_callback,
                 10)
 
@@ -78,7 +80,13 @@ class Luna(Node):
         # Setting up the RC Reader for GPIO 15 (BCM, UART Rx)
         self.RC_GPIO_IN = 15
 
+        # Setting up the Hardware to Software Switch for GPIO 11 (BCM, OUTPUT)
+        self.HARD_TO_SOFT = 9
+        self.pi.set_mode(self.HARD_TO_SOFT, pigpio.OUTPUT)
+        self.pi.write(self.HARD_TO_SOFT,1) # Start with the Software in control (0 Hardware, 1 Software)
+
         # Default control system output is the Pi's PWM
+        self.valid_switch_status = ["Pi", "RC", "Hardware", "Panda"]
         self.switch_status = "Pi"
 
         # Setting up the Pi's PWM Generator with pigpio
@@ -96,6 +104,9 @@ class Luna(Node):
         self.ARM_LENGTH_CH = 3 #ch4 is arm length
         self.ARM_TILT_CH = 4 #ch5 is arm tilt
         self.BIN_TILT_CH = 5 #ch6 is bin tilt
+
+        # Setting up the Pi's Base Cmds initial DCs
+        self.Pi_DCs = [self.Pi_MID, self.Pi_MID, self.Pi_MID, self.Pi_MID, self.Pi_MID, self.Pi_MID]
 
 
         # Setting up Luna's Output GPIOs
@@ -140,7 +151,7 @@ class Luna(Node):
         drill_speed_norm = (drill_speed-75)/25 # 75=0, 50=-1,100=+1
         arm_tilt_norm = (arm_tilt-75)/25 # 75=0, 50=-1,100=+1
         bin_tilt_norm = (bin_tilt-75)/25 # 75=0, 50=-1,100=+1
-
+        '''
         # Troubleshooting Printouts
         print(f"drive_speed,drive_speed_norm: {drive_speed},{drive_speed_norm}")
         print(f"drive_direction,drive_direction_norm: {drive_direction},{drive_direction_norm}")
@@ -148,7 +159,7 @@ class Luna(Node):
         print(f"drill_speed,drill_speed_norm: {drill_speed},{drill_speed_norm}")
         print(f"arm_tilt,arm_tilt_norm: {arm_tilt},{arm_tilt_norm}")
         print(f"bin_tilt,bin_tilt_norm: {bin_tilt},{bin_tilt_norm}")
-
+        '''
         # Joystick Tolerances
         joy_tol_pos = .04
         joy_tol_neg = -1*joy_tol_pos
@@ -179,12 +190,12 @@ class Luna(Node):
                     self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], 150-drive_direction)
                     self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_direction)
             else:
-                print("Straight")
+                #print("Straight")
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["L_M"][0], drive_speed)
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["R_M"][0], drive_speed)
             # Drill Control Logic (drill_speed)
             if drill_speed > one_way_min_tol and drill_speed < one_way_max_tol:
-                print("Drilling")
+                #print("Drilling")
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT["DRILL"][0], drill_speed)
             elif drill_speed <= one_way_min_tol:
                 print("Drill speed is at Min Boundary")
@@ -202,23 +213,29 @@ class Luna(Node):
                 self.pi.set_PWM_dutycycle(self.LUNA_GPIO_OUT[joint][0], 0)
 
 
+    def read_pi_cmds(self):
+        pass #TODO: Might delete later???
+
 
     def luna_output_timer_callback(self):
-        print(f"Sending output from: {self.switch_status}")
+        #print(f"Sending output from: {self.switch_status}")
         if self.switch_status == "RC":
             DCs = self.read_ibus()
         elif self.switch_status == "Pi":
-            DCs = [self.Pi_STOP] * 6 # TODO: add in speed from cmd topic
+            DCs = self.Pi_DCs # TODO: add in speed from cmd topic
+            #Troubleshooting: print(f"Pi_DCs: {self.Pi_DCs}")
+        elif self.switch_status == "Hardware":
+            DCs = [self.Pi_STOP] * 6 # TODO: verify if self.Pi_STOP is the best value for the Pi output during Hardware control
         else:
             DCs = [self.Pi_STOP] * 6 # TODO: create a number of channels varaible?
         # Move Luna
         self.luna_move(DCs)
         # Update the output PWMs
-        self.update_info(DCs)
+        self.update_info(DCs) #TODO: Fix update info, at the moment it does not update the joints correctly
 
     def luna_info_timer_callback(self):
         print("Luna Info:\n")
-        info = "Luna Info [GPIO, DC]:\nL_M: {self.LUNA_GPIO_OUT['L_M']}\nR_M: {self.LUNA_GPIO_OUT['R_M']}\nDRILL: {self.LUNA_GPIO_OUT['DRILL']}"
+        info = f"Luna Info [GPIO, DC]:\nL_M: {self.LUNA_GPIO_OUT['L_M'][1]}\nR_M: {self.LUNA_GPIO_OUT['R_M'][1]}\nDRILL: {self.LUNA_GPIO_OUT['DRILL'][1]}"
         msg = String()
         msg.data = info
         self.luna_info_publisher_.publish(msg)
@@ -227,18 +244,47 @@ class Luna(Node):
 
     def switch_listener_callback(self, msg):
         self.get_logger().info('Switch Status: "%s"' % msg.data)
-        if msg.data in ["RC","Pi"]:
+        if msg.data in self.valid_switch_status:
             if msg.data == "RC":
+                self.pi.write(self.HARD_TO_SOFT, 1) # Set the hardware relays to NO (software control)
                 self.switch_status = "RC"
             elif msg.data == "Pi":
+                self.pi.write(self.HARD_TO_SOFT, 1) # Set the hardware relays to NO (software control)
                 self.switch_status = "Pi"
+            elif msg.data == "Hardware":
+                self.pi.write(self.HARD_TO_SOFT, 0) # Set the hardware relays to NC (hardware control)
+                self.switch_status = "Hardware"
             else:
                 print(f"Invalid Switch Cmd was received: {msg.data}")
         else:
             print(f"Invalid Switch Cmd was received: {msg.data}")
 
     def cmd_listener_callback(self, msg):
-        self.get_logger().info('Base Cmds: "%s"' % msg.data)
+        self.get_logger().info(f'Base Cmd Vels:\nLinear: [{msg.linear.x},{msg.linear.y},{msg.linear.z}]\nAngular: [{msg.angular.x},{msg.angular.y},{msg.angular.z}]')
+        cmd_vels = [[msg.linear.x,msg.linear.y,msg.linear.z], [msg.angular.x,msg.angular.y,msg.angular.z]]
+        stop = [[0, 0, 0],[0, 0, 0]]
+        fwd = [[0.5, 0, 0],[0, 0, 0]]
+        bwd = [[-0.5, 0, 0],[0, 0, 0]]
+        ptl = [[0, 0, 0],[0, 0, 1]]
+        ptr = [[0.5, 0, 0],[0, 0, -1]]
+        swtlf = [[0.5, 0, 0],[0, 0, 1]]
+        swtrf = [[0.5, 0, 0],[0, 0, -1]]
+        swtlb = [[-0.5, 0, 0],[0, 0, -1]]
+        swtrb = [[-0.5, 0, 0],[0, 0, 1]]
+
+        if cmd_vels == fwd:
+            print("Pi: Straight Forward")
+            self.Pi_DCs[self.DIRECTION_CH] = self.Pi_MID # Straigth is middle
+            self.Pi_DCs[self.SPEED_CH] = 87.5 #TODO:Add Speed varaition logic (FWD half speed)
+        elif cmd_vels == bwd:
+            print("Pi: Straight Backward")
+            self.Pi_DCs[self.DIRECTION_CH] = self.Pi_MID # Straigth is middle
+            self.Pi_DCs[self.SPEED_CH] = 62.5 #TODO:Add Speed varaition logic (BWD half speed)
+        else:
+            print(f"Pi: Stopping Motors")
+            self.Pi_DCs[self.DIRECTION_CH] = self.Pi_MID # Straigth is middle
+            self.Pi_DCs[self.SPEED_CH] = self.Pi_STOP #TODO:Add Speed varaition logic (BWD half speed)
+
 
     def read_ibus(self):
         cf = 20 # conversion factor (microsec to the appropriate duty cycle range (50 to 100))
@@ -325,6 +371,8 @@ def main(args=None):
         print(f"Turn Off All Motors:\nDCs: {DCs_OFF}...")
         luna.pi.stop()
         print("\nStopping PWM")
+        luna.pi.close()
+        print("Closing pigpio")
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
@@ -333,7 +381,6 @@ def main(args=None):
     rclpy.shutdown()
 
     print("Closing")
-    luna.pi.close()
     print("Closing Program")
 
 if __name__ == '__main__':
