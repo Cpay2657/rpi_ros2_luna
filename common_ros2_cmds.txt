@@ -1,0 +1,31 @@
+1. Build a ROS 2 Package:
+
+	colcon build --packages-select <package_name>
+
+	Example:
+
+	colcon build --packages-select rpi_pubsub
+
+2. Publishing a message to a topic in one line:
+
+	ros2 topic pub /<topic_name> std_msgs/msg/String "data: <your_msg>"
+
+	Example:
+
+	ros2 topic pub /LunaSwitch std_msgs/msg/String "data: RC"
+
+3. Running a ROS 2 node
+
+	ros2 run <ros2_pkg_name> <node_entry_point_name>
+
+	Example:
+
+	ros2 run rpi_pubsub luna_test
+
+4. Using the Teleop Keyboard Package
+
+	ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=<new_topic_name>
+
+	Example:
+
+	ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args --remap cmd_vel:=LunaCmdVel
