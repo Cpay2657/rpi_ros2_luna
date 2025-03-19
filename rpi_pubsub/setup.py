@@ -25,6 +25,7 @@ setup(
 		'pwm_reader = rpi_pubsub.rpi_pwm_reader_pub:main',
 		'luna = rpi_pubsub.luna_node:main',
 		'luna_test = rpi_pubsub.luna_node_test:main',
+        'control_manager = rpi_pubsub.control_manager:main',
         ],
     },
 )
