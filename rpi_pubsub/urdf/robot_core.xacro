@@ -1,0 +1,171 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:include filename="$(find luna_bot)/urdf/colors.xacro"/>
+
+    <!-- COLOR MACROS -->
+    <material name="white">
+        <color rgba="1 1 1 1"/>
+    </material>
+
+    <material name="orange">
+        <color rgba="1 0.3 0.1 1"/>
+    </material>
+
+    <material name="blue">
+        <color rgba="0.2 0.2 1 1"/>
+    </material>
+
+    <material name="black">
+        <color rgba="0 0 0 1"/>
+    </material>
+
+    <!-- CHASSIS MACROS -->
+    <xacro:property name="chassis_l" value="1.5" />
+    <xacro:property name="chassis_w" value="0.45" />
+    <xacro:property name="chassis_h" value=".5" />
+    <xacro:property name="chassis_m" value="70" />
+    <!-- WHEEL MACROS -->
+    <xacro:property name="wheel_len" value="0.15" />
+    <xacro:property name="wheel_rad" value="0.125" />
+    <xacro:property name="wheel_m" value="2.5" />
+
+    <link name="base_link">
+    </link>
+
+    <joint name="chassis_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="chassis"/>
+        <origin xyz="0 0 0"/>
+    </joint>
+
+    <link name="chassis">
+        <visual>
+            <origin xyz="0 0 ${(chassis_h/2) + (wheel_rad)}" rpy="0 0 0"/>
+            <geometry>
+                <box size="${chassis_l} ${chassis_w} ${chassis_h}"/>
+            </geometry>
+            <material name="white"/>
+        </visual>
+        <collision>
+            <origin xyz="0 0 ${(chassis_h/2) + (wheel_rad)}" rpy="0 0 0"/>
+            <geometry>
+                <box size="${chassis_l} ${chassis_w} ${chassis_h}"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="70"/>
+            <inertia ixx="${(1/12) * chassis_m * (chassis_h*chassis_h + chassis_l*chassis_l)}" ixy="0.0" ixz="0.0" iyy="${(1/12) * chassis_m * (chassis_h*chassis_h + chassis_w*chassis_w)}" iyz="0.0" izz="${(1/12) * chassis_m * (chassis_l*chassis_l + chassis_w*chassis_w)}"/>
+        </inertial>
+    </link>
+
+    <!-- BACK LEFT WHEEL -->
+
+    <joint name="back_left_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="back_left_wheel"/>
+        <origin xyz="-${chassis_l/2 - wheel_rad} -${chassis_w/2 + wheel_len/2} ${wheel_rad}" rpy="-${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="back_left_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+            <material name="blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="2.5"/>
+            <inertia ixx="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" ixy="0.0" ixz="0.0" iyy="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" iyz="0.0" izz="${(1/2) * wheel_m * (wheel_rad*wheel_rad)}"/>
+        </inertial>
+
+    </link>
+
+    <!-- FRONT LEFT WHEEL -->
+
+    <joint name="front_left_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="front_left_wheel"/>
+        <origin xyz="${chassis_l/2 - wheel_rad} -${chassis_w/2 + wheel_len/2} ${wheel_rad}" rpy="-${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="front_left_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+            <material name="orange"/>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="2.5"/>
+            <inertia ixx="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" ixy="0.0" ixz="0.0" iyy="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" iyz="0.0" izz="${(1/2) * wheel_m * (wheel_rad*wheel_rad)}"/>
+        </inertial>        
+    </link>
+
+    <!-- BACK RIGHT WHEEL -->
+
+    <joint name="back_right_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="back_right_wheel"/>
+        <origin xyz="-${chassis_l/2 - wheel_rad} ${chassis_w/2 + wheel_len/2} ${wheel_rad}" rpy="${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="back_right_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+            <material name="blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="2.5"/>
+            <inertia ixx="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" ixy="0.0" ixz="0.0" iyy="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" iyz="0.0" izz="${(1/2) * wheel_m * (wheel_rad*wheel_rad)}"/>
+        </inertial>
+    </link>
+
+    <!-- FRONT RIGHT WHEEL -->
+
+    <joint name="front_right_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="front_right_wheel"/>
+        <origin xyz="${chassis_l/2 - wheel_rad} ${chassis_w/2 + wheel_len/2} ${wheel_rad}" rpy="${pi/2} 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="front_right_wheel">
+        <visual>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+            <material name="orange"/>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="${wheel_len}" radius="${wheel_rad}" />
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="2.5"/>
+            <inertia ixx="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" ixy="0.0" ixz="0.0" iyy="${(1/12) * wheel_m * (3 * wheel_rad * wheel_rad + wheel_len*wheel_len)}" iyz="0.0" izz="${(1/2) * wheel_m * (wheel_rad*wheel_rad)}"/>
+        </inertial>
+    </link>
+
+</robot>
