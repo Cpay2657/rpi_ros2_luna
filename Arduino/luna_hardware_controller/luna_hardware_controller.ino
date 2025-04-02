@@ -44,7 +44,7 @@ char receivedChars[numChars];
 char tempChars[numChars];        // temporary array for use when parsing
 
       // variables to hold the parsed data
-char messageFromPC[numChars] = {0};
+char messageFromPC[numChars] = {'a'};
 int integerFromPC = 0;
 float leftMotorDC = 0.0;
 float rightMotorDC = 0.0;
@@ -193,6 +193,6 @@ void sendData() {
     Serial.print(" ");
     Serial.print("encoderRight ");
     Serial.print(positionRight);
-    Serial.print(" ");
+    // Serial.print(" ");
     Serial.println();
 }

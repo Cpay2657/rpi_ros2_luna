@@ -54,12 +54,13 @@ def main():
             # Read the line
             s_bytes = ser.readline()
             decoded_bytes = s_bytes.decode("utf-8").strip('\r\n')
-            print(decoded_bytes)
+            # print(decoded_bytes) # Troubleshooting
             # Parse the line:
             #Format: data[0]    data[1] data[2]     data[3] data[4]         data[5] data[6]         data[7] data[8]         data[9] data[10]    data[11]data[12]        data[13]  
             #Format: Message    str     leftMotorDC float   leftMotorPW_US  int     rightMotorDC    float   rightMotorPW_US int     encoderLeft int     encoderRight    int 
             #Ex: Message Hi leftMotorDC -1.00 leftMotorPW_US 1000 rightMotorDC -1.00 rightMotorPW_US 1000 encoderLeft 0 encoderRight 0
             data = decoded_bytes.split() # split the received data string into an array using a " " as the split.
+            # print(data) # Troubleshooting
 
             if len(data) > 0:
                 msg = data[1]
@@ -72,18 +73,11 @@ def main():
 
                 dataFields = [msg,leftMotorDC,leftMotorPW_US,rightMotorDC,rightMotorPW_US,encoderLeft,encoderRight]
 
-            print(dataFields)
-
-            # # # Parse the line
-            # # if k == 0:
-            # #     values = decoded_bytes.split(",")
-            # # else:
-            #     # values = [float(x) for x in decoded_bytes.split()]
-            # values = [float(x) for x in decoded_bytes.split()]
-            # print(values)
+                print(dataFields)
         except Exception as e:
             print("Error encountered, line was not recorded.")
             print(f"{e}")
+        # TODO: Input is a blocking function. Comment it out to receive data when they are sent from the arduino with no delay.
         cmd = input("Enter the DC for the Motors (format: <str, float, float>): ")
         sendmess(cmd)
 
