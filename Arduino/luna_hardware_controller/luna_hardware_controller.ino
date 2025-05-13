@@ -2,6 +2,9 @@
  * This code was edited by Christopher Payne on 1 April 2025
 
  TODO: Solve why the switch_pin always starts HIGH. It should start LOW for RC Default. - C.P. 15 April 2025
+
+ example serial input: <0,2,-2,0,0,0,0>
+ switch pin: off, linearVel = +2 m/s (fwd), angularVel = -2 rev/s (left), armTiltVel = 0, armExtendVel = 0, drillVel = 0, binVel = 0
  */
 
 #include <Encoder.h>
@@ -16,8 +19,8 @@ static int encoderLeftPinA = 2;
 static int encoderLeftPinB = 5;
 static int encoderRightinA = 3;
 static int encoderRightPinB = 6;
-static int leftMotorPin = 10;
-static int rightMotorPin = 9;
+static int linearPin = 9;
+static int angularPin = 10;
 static int switchPin = 13;
 static int armTiltPin = 0;
 static int armExtendPin = 1;
@@ -44,8 +47,8 @@ float binMotorMaxVel = 2; //m/s
 float StopVel = 0;
 
 //Motors' Initial Vel:
-float leftMotorVelInit = 0.0; //m/s
-float rightMotorVelInit = 0.0; //m/s
+float linearVelInit = 0.0; //m/s
+float angularVelInit = 0.0; //m/s
 float armTiltVelInit = 0.0; //m/s
 float armExtendVelInit = 0.0; //m/s
 float drillMotorVelInit = 0.0; //m/s
@@ -55,20 +58,20 @@ float binMotorVelInit = 0.0; //m/s
 int switch_control;
 long encoderLeftVal;
 long encoderRightVal;
-float leftMotorVel;
-float rightMotorVel;
+float linearVel;
+float angularVel;
 float armTiltVel;
 float armExtendVel;
 float drillMotorVel;
 float binMotorVel;
-float leftMotorDC;
-float rightMotorDC;
+float linearDC;
+float angularDC;
 float armTiltDC;
 float armExtendDC;
 float drillMotorDC;
 float binMotorDC;
-float leftMotorPW_US;
-float rightMotorPW_US;
+float linearPW_US;
+float angularPW_US;
 float armTiltPW_US;
 float armExtendPW_US;
 float drillMotorPW_US;
@@ -79,20 +82,20 @@ void initMsgValues(){
   int switch_control = 0; // Default to RC Control
   long encoderLeftVal  = -999;
   long encoderRightVal = -999;
-  float leftMotorVel = leftMotorVelInit;
-  float rightMotorVel = rightMotorVelInit;
+  float linearVel = linearVelInit;
+  float angularVel = angularVelInit;
   float armTiltVel = armTiltVelInit;
   float armExtendVel = armExtendVelInit;
   float drillMotorVel = drillMotorVelInit;
   float binMotorVel = binMotorVelInit;
-  float leftMotorDC = StopDC;
-  float rightMotorDC = StopDC;
+  float linearDC = StopDC;
+  float angularDC = StopDC;
   float armTiltDC = StopDC;
   float armExtendDC = StopDC;
   float drillMotorDC = StopDC;
   float binMotorDC = StopDC;
-  float leftMotorPW_US = rcPWMPeriodMidUS;
-  float rightMotorPW_US = rcPWMPeriodMidUS;
+  float linearPW_US = rcPWMPeriodMidUS;
+  float angularPW_US = rcPWMPeriodMidUS;
   float armTiltPW_US = rcPWMPeriodMidUS;
   float armExtendPW_US = rcPWMPeriodMidUS;
   float drillMotorPW_US = rcPWMPeriodMidUS;
@@ -105,8 +108,8 @@ Encoder encoderLeft(encoderLeftPinA, encoderLeftPinB);
 Encoder encoderRight(encoderRightinA, encoderRightPinB);
 
 // Motors *Using Servo library to send pulse width (ms) rather than duty cycle
-Servo leftMotor;
-Servo rightMotor;
+Servo linear;
+Servo angular;
 Servo armTilt;
 Servo drillMotor;
 Servo binMotor;
@@ -120,8 +123,8 @@ char tempChars[numChars];        // temporary array for use when parsing
       // variables to hold the parsed data
 // char messageFromPC[numChars] = {'a'};
 // int integerFromPC = 0;
-// float leftMotorDC = 0.0;
-// float rightMotorDC = 0.0;
+// float linearDC = 0.0;
+// float angularDC = 0.0;
 
 void setup() {
   // Setup Serial: *Note this must match in the Python Script
@@ -131,16 +134,16 @@ void setup() {
   sendDataToSerial();
 
   // Setup Hardware Pins:
-  leftMotor.attach(leftMotorPin);
-  rightMotor.attach(rightMotorPin);
+  linear.attach(linearPin);
+  angular.attach(angularPin);
   armTilt.attach(armTiltPin);
   drillMotor.attach(drillMotorPin);
   binMotor.attach(binMotorPin);
   pinMode(switchPin, OUTPUT);
 
   // Intialize Hardware Pins:
-  leftMotor.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
-  rightMotor.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
+  linear.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
+  angular.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
   armTilt.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
   drillMotor.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
   binMotor.writeMicroseconds(rcPWMPeriodMidUS);  // set servo to mid-point
@@ -222,7 +225,7 @@ void parseReceivedData() {      // split the data into its parts
 
     /*IMPORTANT NOTE: ORDER of Data Being Recieved. This MUST match the ORDER of Data on the Transmitter 
       dataFieldsRx = [switch_control,
-                      leftMotorVel, rightMotorVel, armTiltVel, armExtendVel, drillMotorVel, binMotorVel]
+                      linearVel, angularVel, armTiltVel, armExtendVel, drillMotorVel, binMotorVel]
     */
 
     /*IMPORTANT NOTE: ORDER of Data Being Recieved. This MUST match the ORDER of Data on the transmitter
@@ -250,26 +253,26 @@ void parseReceivedData() {      // split the data into its parts
     
     /*Drive Motor Control Data*/
     strtokIndx = strtok(NULL, ",");
-    leftMotorVel = atof(strtokIndx);     // convert this part to a float
+    linearVel = atof(strtokIndx);     // convert this part to a float
 
     strtokIndx = strtok(NULL, ",");
-    rightMotorVel = atof(strtokIndx);     // convert this part to a float
+    angularVel = atof(strtokIndx);     // convert this part to a float
 
     /*Duty Cycle (DC) to Pulse Width in nanoseconds (PW_US)*/
     /*Example: ((2000us - 1000us) / (100% - (-100%))) * 100% + 1500us = 2000us*/
     /*Example: ((2000us - 1000us) / (100% - (-100%))) * 0% + 1500us = 1500us*/
     /*Example: ((2000us - 1000us) / (100% - (-100%))) * -100% + 1500us = 1000us*/
     /*Example: ((MaxOfNewRange - MinOfNewRange) / (MaxOfOldRange - (MinOfOldRange))) * (ValueInOldRange) + MidOfNewRange = ValueInNewRange*/
-    //leftMotorDC = ((FwdMaxDC - BwdMaxDC) / (driveMotorMaxVel - (-1*driveMotorMaxVel))) * (leftMotorVel) + StopDC;
-    leftMotorDC = convertToNewRange(leftMotorVel,(-1*driveMotorMaxVel),driveMotorMaxVel,BwdMaxDC,FwdMaxDC);
-    //rightMotorDC = ((FwdMaxDC-BwdMaxDC) / (driveMotorMaxVel-(-1*driveMotorMaxVel))) * rightMotorVel + StopDC;
-    rightMotorDC = convertToNewRange(rightMotorVel,(-1*driveMotorMaxVel),driveMotorMaxVel,BwdMaxDC,FwdMaxDC);
+    //linearDC = ((FwdMaxDC - BwdMaxDC) / (driveMotorMaxVel - (-1*driveMotorMaxVel))) * (linearVel) + StopDC;
+    linearDC = convertToNewRange(linearVel,(-1*driveMotorMaxVel),driveMotorMaxVel,BwdMaxDC,FwdMaxDC);
+    //angularDC = ((FwdMaxDC-BwdMaxDC) / (driveMotorMaxVel-(-1*driveMotorMaxVel))) * angularVel + StopDC;
+    angularDC = convertToNewRange(angularVel,(-1*driveMotorMaxVel),driveMotorMaxVel,BwdMaxDC,FwdMaxDC);
 
     /*Duty Cycle (DC) to Pulse Width in nanoseconds (PW_US)*/
-    //leftMotorPW_US = ((rcPWMPeriodMaxUS-rcPWMPeriodMinUS) / (FwdMaxDC-(BwdMaxDC))) * leftMotorDC + rcPWMPeriodMidUS;
-    //rightMotorPW_US = ((rcPWMPeriodMaxUS-rcPWMPeriodMinUS) / (FwdMaxDC-(BwdMaxDC))) * rightMotorDC + rcPWMPeriodMidUS;
-    leftMotorPW_US = convertToNewRange(leftMotorDC,BwdMaxDC,FwdMaxDC,rcPWMPeriodMinUS,rcPWMPeriodMaxUS);
-    rightMotorPW_US = convertToNewRange(rightMotorDC,BwdMaxDC,FwdMaxDC,rcPWMPeriodMinUS,rcPWMPeriodMaxUS);
+    //linearPW_US = ((rcPWMPeriodMaxUS-rcPWMPeriodMinUS) / (FwdMaxDC-(BwdMaxDC))) * linearDC + rcPWMPeriodMidUS;
+    //angularPW_US = ((rcPWMPeriodMaxUS-rcPWMPeriodMinUS) / (FwdMaxDC-(BwdMaxDC))) * angularDC + rcPWMPeriodMidUS;
+    linearPW_US = convertToNewRange(linearDC,BwdMaxDC,FwdMaxDC,rcPWMPeriodMinUS,rcPWMPeriodMaxUS);
+    angularPW_US = convertToNewRange(angularDC,BwdMaxDC,FwdMaxDC,rcPWMPeriodMinUS,rcPWMPeriodMaxUS);
 
     /*Arm Tilt Linear Actuator Control Data*/
     strtokIndx = strtok(NULL, ",");
@@ -320,13 +323,13 @@ void writeDataToHardware(){
   }
   
   /*Drive Motor Control*/
-  if ((leftMotorPW_US == 0) && (rightMotorPW_US == 0)){
-    leftMotor.writeMicroseconds(0);
-    rightMotor.writeMicroseconds(0);
+  if ((linearPW_US == 0) && (angularPW_US == 0)){
+    linear.writeMicroseconds(0);
+    angular.writeMicroseconds(0);
   }
   else{
-    leftMotor.writeMicroseconds(leftMotorPW_US);
-    rightMotor.writeMicroseconds(rightMotorPW_US);
+    linear.writeMicroseconds(linearPW_US);
+    angular.writeMicroseconds(angularPW_US);
   }
 
   /*Arm Tilt Motor Control*/
@@ -361,20 +364,20 @@ void sendDataToSerial() {
       dataFieldsTx = [switch_control ,
                     encoderLeftVal ,
                     encoderRightVal ,
-                    leftMotorVel ,
-                    rightMotorVel ,
+                    linearVel ,
+                    angularVel ,
                     armTiltVel ,
                     armExtendVel ,
                     drillMotorVel ,
                     binMotorVel, 
-                    leftMotorDC ,
-                    rightMotorDC ,
+                    linearDC ,
+                    angularDC ,
                     armTiltDC ,
                     armExtendDC ,
                     drillMotorDC ,
                     binMotorDC ,
-                    leftMotorPW_US ,
-                    rightMotorPW_US ,
+                    linearPW_US ,
+                    angularPW_US ,
                     armTiltPW_US ,
                     armExtendPW_US ,
                     drillMotorPW_US,
@@ -394,20 +397,20 @@ void sendDataToSerial() {
     /*Serial.print("switch_control ");*/ Serial.print(switch_control); Serial.print(" ");
     /*Serial.print("encoderLeftVal ");*/ Serial.print(encoderLeftVal); Serial.print(" ");
     /*Serial.print("encoderRightVal ");*/ Serial.print(encoderRightVal); Serial.print(" ");
-    /*Serial.print("leftMotorVel ");*/ Serial.print(leftMotorVel); Serial.print(" ");
-    /*Serial.print("rightMotorVel ");*/ Serial.print(rightMotorVel); Serial.print(" ");
+    /*Serial.print("linearVel ");*/ Serial.print(linearVel); Serial.print(" ");
+    /*Serial.print("angularVel ");*/ Serial.print(angularVel); Serial.print(" ");
     /*Serial.print("armTiltVel ");*/ Serial.print(armTiltVel); Serial.print(" ");
     /*Serial.print("armExtendVel ");*/ Serial.print(armExtendVel); Serial.print(" ");
     /*Serial.print("drillMotorVel ");*/ Serial.print(drillMotorVel); Serial.print(" ");
     /*Serial.print("binMotorVel ");*/ Serial.print(binMotorVel); Serial.print(" ");
-    /*Serial.print("leftMotorDC ");*/ Serial.print(leftMotorDC); Serial.print(" ");
-    /*Serial.print("rightMotorDC ");*/ Serial.print(rightMotorDC); Serial.print(" ");
+    /*Serial.print("linearDC ");*/ Serial.print(linearDC); Serial.print(" ");
+    /*Serial.print("angularDC ");*/ Serial.print(angularDC); Serial.print(" ");
     /*Serial.print("armTiltDC ");*/ Serial.print(armTiltDC); Serial.print(" ");
     /*Serial.print("armExtendDC ");*/ Serial.print(armExtendDC); Serial.print(" ");
     /*Serial.print("drillMotorDC ");*/ Serial.print(drillMotorDC); Serial.print(" ");
     /*Serial.print("binMotorDC ");*/ Serial.print(binMotorDC); Serial.print(" ");
-    /*Serial.print("leftMotorPW_US ");*/ Serial.print(leftMotorPW_US); Serial.print(" ");
-    /*Serial.print("rightMotorPW_US ");*/ Serial.print(rightMotorPW_US); Serial.print(" ");
+    /*Serial.print("linearPW_US ");*/ Serial.print(linearPW_US); Serial.print(" ");
+    /*Serial.print("angularPW_US ");*/ Serial.print(angularPW_US); Serial.print(" ");
     /*Serial.print("armTiltPW_US ");*/ Serial.print(armTiltPW_US); Serial.print(" ");
     /*Serial.print("armExtendPW_US ");*/ Serial.print(armExtendPW_US); Serial.print(" ");
     /*Serial.print("drillMotorPW_US ");*/ Serial.print(drillMotorPW_US); Serial.print(" ");
