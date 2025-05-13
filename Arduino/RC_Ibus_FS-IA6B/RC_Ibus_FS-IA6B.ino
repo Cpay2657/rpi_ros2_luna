@@ -25,13 +25,13 @@
 // Hardware Pins:
 static int iBusPin = 0; // Serial Rx **NOTE: Disconnect during upload**
 static int switchPin = 13; // Not implemmented
-static int linearPin = 12; // CH 2 on RC Tx
-static int angularPin = 11; // CH 1 on RC Tx
+static int linearPin = 11; // CH 2 on RC Tx
+static int angularPin = 10; // CH 1 on RC Tx
 static int armExtendPUL = 2; // CH 3
 static int armExtendDIR = 3; // CH 3
-static int armTiltPin = 8; // CH 4
-static int drillMotorPin = 7; // CH 5
-static int binMotorPin = 6; // CH 6
+static int armTiltPin = 9; // CH 4
+static int drillMotorPin = 6; // CH 5
+static int binMotorPin = 5; // CH 6
 
 //Pre-defined Values:
 //For Stepper Motor
